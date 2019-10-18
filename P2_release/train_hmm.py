@@ -114,3 +114,39 @@ def gen_training_data(train_csv, n):
 
 train_ngrams, train_word_tag = gen_training_data(train_csv, 2)
 
+def tag_example(example, n, tn, twt, kt, ke, lamb):
+    tokens = example.split(' ')
+    tags = []
+    for i, t in enumerate(tokens):
+        if i < n:
+            emission_0  = word_tag_prob(twt, t, '0', k=ke)
+            emission_1 = word_tag_prob(twt, t, '1', k=ke)
+            trans_0 = ngram_prob(tn, '<s>' * i + tags + ['0'], lamb=lamb, k=kt)
+            trans_1 = ngram_prob(tn, '<s>' * i + tags + ['1'], lamb=lamb, k=kt)
+            p_0 = emission_0 * trans_0
+            p_1 = emission_1 * trans_1
+            if p_0 > p_1:
+                tags.append(0)
+            else:
+                tags.append(1)
+        else:
+            emission_0  = word_tag_prob(twt, t, '0', k=ke)
+            emission_1 = word_tag_prob(twt, t, '1', k=ke)
+            trans_0 = ngram_prob(tn, tags[:i-n+1] + ['0'], lamb=lamb, k=kt)
+            trans_1 = ngram_prob(tn, tags[:i-n+1] + ['1'], lamb=lamb, k=kt)
+            p_0 = emission_0 * trans_0
+            p_1 = emission_1 * trans_1
+            if p_0 > p_1:
+                tags.append(0)
+            else:
+                tags.append(1)
+    return tags
+
+def tag_csv(val_csv, n, tn, twt, kt, ke, lamb):
+    for i, row in val_csv.iterrows():
+        sentence = row['sentence'].split(" ")
+        tags = []
+        tags += tag_example(sentence, n, tn, twt, kt, ke, lamb)
+    dic = dict(zip([i for i in range(len(tags))], tags))
+    df = pd.DataFrame.from_dict(dic)  
+    df.to_csv('val_results.csv')

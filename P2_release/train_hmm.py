@@ -43,7 +43,7 @@ def string_list_to_list(l):
     return l.strip('][').split(", ")
 
 """
-returns the probability of [ngram] given the training set [train_ngrams]
+returns the log probability of [ngram] given the training set [train_ngrams]
 train_ngrams is the dictionary of ngrams to counts from the training set
 ngram is the ngram that the probability of will be returned using ngram estimation
 lamb is the weight
@@ -57,17 +57,24 @@ def ngram_prob(train_ngrams, ngram, lamb=1, k=0):
         return lamb * np.log(k / denom)
 
 """
-returns the probability of [word] given [tag] using the training set [train_word_tags]
+returns the log probability of [word] given [tag] using the training set [train_word_tags]
 train_word_tags is the dictionary mapping tags to a dictionary mapping words to counts
 k is the smoothing parameter
 """
-# def word_tag_prob(train_word_tags, word, tag, k=0):
-#     denom = 
+def word_tag_prob(train_word_tags, word, tag, k=0):
+    denom = sum(train_word_tags[tag].values()) + k*len(train_word_tags[tag])
+    if word in train_word_tags[tag]:
+        return np.log((train_word_tags[tag][word] + k) / denom)
+    else:
+        return np.log(k / denom)
 
 
 
 
 l = string_list_to_list(train_csv['label_seq'][9])
 print(gen_ngram_from_list(l, 2))
-print(ngram_prob(gen_ngram_from_list(l, 2), ['1', '1'], 2, k=1))
+print(np.exp(ngram_prob(gen_ngram_from_list(l, 2), str(['1', '1']), k=1)))
 print(gen_word_tag_dict(train_csv['sentence'][9].split(" "), l))
+wt = gen_word_tag_dict(train_csv['sentence'][9].split(" "), l)
+print(np.exp(word_tag_prob(wt, 'That', '1')))
+print(np.exp(word_tag_prob(wt, 'That', '0', 1)))

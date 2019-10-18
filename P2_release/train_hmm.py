@@ -12,14 +12,18 @@ n - specifies size of ngrams
 def gen_ngram_from_list(l, n):
     ngrams = {}
     for i in range(len(l)):
-        if i + n <= len(l):
-            ng = str(l[i:i+n])
+        if i < n-1:
+            ng = ["<s>"]*(n-1-i) + l[:i+1]
             if ng in ngrams:
                 ngrams[ng] += 1
             else:
                 ngrams[ng] = 1
         else:
-            break
+            ng = str(l[i-(n-1):i+1])
+            if ng in ngrams:
+                ngrams[ng] += 1
+            else:
+                ngrams[ng] = 1
     return ngrams
 
 """

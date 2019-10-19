@@ -68,9 +68,10 @@ train_word_tags is the dictionary mapping tags to a dictionary mapping words to 
 k is the smoothing parameter
 """
 def word_tag_prob(train_word_tags, word, tag, k=0):
-    denom = sum(train_word_tags[tag].values()) + k*len(train_word_tags[tag])
+    vocab = sum(list(map(lambda x: len(x), train_word_tag.values())))
+    denom = sum(train_word_tags[tag].values()) + k*vocab
     if word in train_word_tags[tag]:
-        return train_word_tags[tag][word] * np.log((train_word_tags[tag][word] + k) / denom)
+        return np.log((train_word_tags[tag][word] + k) / denom)
     else:
         return np.log(k / denom)
 
@@ -114,6 +115,7 @@ def gen_training_data(train_csv, n):
     return train_ngrams, train_word_tag
 
 train_ngrams, train_word_tag = gen_training_data(train_csv, 2)
+#print(train_ngrams)
 
 def tag_example(example, n, tn, twt, kt, ke, lamb):
     tags = []
@@ -147,8 +149,6 @@ def tag_csv(val_csv, n, tn, twt, kt, ke, lamb):
     for i, row in val_csv.iterrows():
         sentence = row['sentence'].split(" ")
         tags += viterbi(sentence, n, tn, twt, kt, ke, lamb)
-    print(len(tags))
-    print(tags[:32])
     df = pd.DataFrame(tags, index = [i for i in range(len(tags))])  
     df.to_csv('val_results_vit.csv')
 
@@ -156,6 +156,7 @@ def viterbi(example, n, tn, twt, kt, ke, lamb):
     score = np.zeros((len(example), 2))
     backptr = np.zeros((len(example), 2))
     for i, t in enumerate(example):
+        #print(word_tag_prob(twt, t, '0', k=ke), word_tag_prob(twt, t, '1', k=ke))
         if i < n-1:
             score[i,0] = word_tag_prob(twt, t, '0', k=ke) + ngram_prob(tn, ['<s>', '0'], lamb=lamb, k=kt)
             score[i,1] = word_tag_prob(twt, t, '1', k=ke) + ngram_prob(tn, ['<s>', '1'], lamb=lamb, k=kt)
@@ -177,7 +178,7 @@ def viterbi(example, n, tn, twt, kt, ke, lamb):
             else:
                 score[i,1] = score_11 + word_tag_prob(twt, t, '1', k=ke)
                 backptr[i,1] = 1
-    print(score, backptr)
+    #print(score, backptr)
     tags = [0 for i in example]
     if score[-1,0] > score[-1,1]:
         tags[-1] = 0
@@ -188,7 +189,8 @@ def viterbi(example, n, tn, twt, kt, ke, lamb):
     return tags
 
 
-tag_csv(val_csv, 2, train_ngrams, train_word_tag, 1, 0.1, 0.1)
+
+tag_csv(val_csv, 2, train_ngrams, train_word_tag, 0, 0.1, 0.1)
 #print(viterbi("Ca n't fail to be entertaining .".split(' '), 2, train_ngrams, train_word_tag, 1, 1, 1))
 # for i, row in train_csv.iterrows():
 #     l = viterbi(row['sentence'].split(' '), 2, train_ngrams, train_word_tag, 1, 1, 1)

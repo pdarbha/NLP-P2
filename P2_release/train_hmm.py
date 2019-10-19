@@ -13,7 +13,7 @@ def gen_ngram_from_list(l, n):
     ngrams = {}
     for i in range(len(l)):
         if i < n-1:
-            ng = ["<s>"]*(n-1-i) + l[:i+1]
+            ng = str(["<s>"]*(n-1-i) + l[:i+1])
             if ng in ngrams:
                 ngrams[ng] += 1
             else:
@@ -78,7 +78,7 @@ def word_tag_prob(train_word_tags, word, tag, k=0):
 
 # l = string_list_to_list(train_csv['label_seq'][9])
 # print(gen_ngram_from_list(l, 2))
-# print(np.exp(ngram_prob(gen_ngram_from_list(l, 2), ['1', '1'], k=1)))
+# print(np.exp(ngram_prob(gen_ngram_from_list(l, 2), [<s>, '1'], k=1)))
 # print(gen_word_tag_dict(train_csv['sentence'][9].split(" "), l))
 # wt = gen_word_tag_dict(train_csv['sentence'][9].split(" "), l)
 # print(np.exp(word_tag_prob(wt, 'That', '1')))

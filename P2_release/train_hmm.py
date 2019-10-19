@@ -4,7 +4,7 @@ import numpy as np
 
 train_csv = pd.read_csv('data_release/train.csv', encoding = 'ISO-8859-1')
 val_csv = pd.read_csv('data_release/val.csv', encoding = 'ISO-8859-1')
-
+test_csv = pd.read_csv('data_release/test_no_label.csv', encoding = 'ISO-8859-1') 
 """
 generates a dictionary mapping ngrams to counts from the list l
 l - list of either tokens or tags
@@ -54,13 +54,21 @@ ngram is the ngram that the probability of will be returned using ngram estimati
 lamb is the weight
 k is the smoothing parameter
 """
-def ngram_prob(train_ngrams, ng, lamb=1, k=0):
-    ngram = str(ng)
-    denom = sum(train_ngrams.values()) + k*len(train_ngrams)
-    if ngram in train_ngrams:
-        return lamb * np.log((train_ngrams[ngram] + k) / denom)
+def bigram_prob(train_bigrams, train_unigrams, ng, l1=0, k=0):
+    bigram = str(ng)
+    unigram = str(ng[0])
+    denom_bi = sum(train_bigrams.values()) + k*len(train_bigrams)
+    denom_uni = sum(train_unigrams.values()) + k*len(train_unigrams)
+    if bigram not in train_bigrams:
+        p_bi = k / denom_bi
     else:
-        return lamb * np.log(k / denom)
+        p_bi = (train_bigrams[bigram] + k) / denom_bi
+    if unigram not in train_unigrams:
+        p = k / denom_uni
+    else: 
+        p_uni = (train_unigrams[unigram] + k) / denom_uni
+    p = (1-l1) * p_bi + l1 * p_uni
+    return np.log(p)
 
 """
 returns the log probability of [word] given [tag] using the training set [train_word_tags]
@@ -113,16 +121,17 @@ def gen_training_data(train_csv, n):
                     train_word_tag[tag][word] = wdic[tag][word]
     return train_ngrams, train_word_tag
 
-train_ngrams, train_word_tag = gen_training_data(train_csv, 2)
+train_bigrams, train_word_tag = gen_training_data(train_csv, 2)
+train_unigrams, _ = gen_training_data(train_csv, 1)
 
-def tag_example(example, n, tn, twt, kt, ke, lamb):
+def tag_example(example, tb, tu, twt, kt, ke, l1):
     tags = []
     for i, t in enumerate(example):
-        if i < n:
+        if i < 2:
             emission_0  = word_tag_prob(twt, t, '0', k=ke)
             emission_1 = word_tag_prob(twt, t, '1', k=ke)
-            trans_0 = ngram_prob(tn, ['<s>'] * i + tags + ['0'], lamb=lamb, k=kt)
-            trans_1 = ngram_prob(tn, ['<s>'] * i + tags + ['1'], lamb=lamb, k=kt)
+            trans_0 = bigram_prob(tb, tu, ['<s>'] * i + tags + ['0'], l1=l1, k=kt)
+            trans_1 = bigram_prob(tb, tu, ['<s>'] * i + tags + ['1'], l1=l1, k=kt)
             p_0 = emission_0 * trans_0
             p_1 = emission_1 * trans_1
             if p_0 > p_1:
@@ -132,8 +141,8 @@ def tag_example(example, n, tn, twt, kt, ke, lamb):
         else:
             emission_0  = word_tag_prob(twt, t, '0', k=ke)
             emission_1 = word_tag_prob(twt, t, '1', k=ke)
-            trans_0 = ngram_prob(tn, tags[:i-n+1] + ['0'], lamb=lamb, k=kt)
-            trans_1 = ngram_prob(tn, tags[:i-n+1] + ['1'], lamb=lamb, k=kt)
+            trans_0 = bigram_prob(tb, tu, tags[:i-2+1] + ['0'], l1=l1, k=kt)
+            trans_1 = bigram_prob(tb, tu, tags[:i-2+1] + ['1'], l1=l1, k=kt)
             p_0 = emission_0 * trans_0
             p_1 = emission_1 * trans_1
             if p_0 > p_1:
@@ -142,14 +151,21 @@ def tag_example(example, n, tn, twt, kt, ke, lamb):
                 tags.append(1)
     return tags
 
-def tag_csv(val_csv, n, tn, twt, kt, ke, lamb):
+def tag_csv(val_csv, tb, tu, twt, kt, ke, l1):
     tags = []
     for i, row in val_csv.iterrows():
         sentence = row['sentence'].split(" ")
-        tags += tag_example(sentence, n, tn, twt, kt, ke, lamb)
+        tags += tag_example(sentence, tb, tu, twt, kt, ke, l1)
     print(len(tags))
     print(tags[:32])
     df = pd.DataFrame(tags, index = [i for i in range(len(tags))])  
-    df.to_csv('val_results.csv')
+    df.to_csv('test_results.csv')
 
-tag_csv(val_csv, 2, train_ngrams, train_word_tag, 1, 1, 1)
+def tune(val_csv, tb, tu, twt):
+    for ke in range(0.1, 5.1, 0.1):
+        for kt in range(0.1, 5.1, 0.1):
+            for l1 in range(0.05, 0.96, 0.01):
+                tag_csv(val_csv, tb, tu, twt, kt, ke, l1)
+                
+
+tag_csv(test_csv, train_bigrams, train_word_tag, 1, 1, 1)

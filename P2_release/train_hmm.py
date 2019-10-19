@@ -3,6 +3,7 @@ import numpy as np
 
 
 train_csv = pd.read_csv('data_release/train.csv', encoding = 'ISO-8859-1')
+val_csv = pd.read_csv('data_release/val.csv', encoding = 'ISO-8859-1')
 
 """
 generates a dictionary mapping ngrams to counts from the list l
@@ -114,3 +115,41 @@ def gen_training_data(train_csv, n):
 
 train_ngrams, train_word_tag = gen_training_data(train_csv, 2)
 
+def tag_example(example, n, tn, twt, kt, ke, lamb):
+    tags = []
+    for i, t in enumerate(example):
+        if i < n:
+            emission_0  = word_tag_prob(twt, t, '0', k=ke)
+            emission_1 = word_tag_prob(twt, t, '1', k=ke)
+            trans_0 = ngram_prob(tn, ['<s>'] * i + tags + ['0'], lamb=lamb, k=kt)
+            trans_1 = ngram_prob(tn, ['<s>'] * i + tags + ['1'], lamb=lamb, k=kt)
+            p_0 = emission_0 * trans_0
+            p_1 = emission_1 * trans_1
+            if p_0 > p_1:
+                tags.append(0)
+            else:
+                tags.append(1)
+        else:
+            emission_0  = word_tag_prob(twt, t, '0', k=ke)
+            emission_1 = word_tag_prob(twt, t, '1', k=ke)
+            trans_0 = ngram_prob(tn, tags[:i-n+1] + ['0'], lamb=lamb, k=kt)
+            trans_1 = ngram_prob(tn, tags[:i-n+1] + ['1'], lamb=lamb, k=kt)
+            p_0 = emission_0 * trans_0
+            p_1 = emission_1 * trans_1
+            if p_0 > p_1:
+                tags.append(0)
+            else:
+                tags.append(1)
+    return tags
+
+def tag_csv(val_csv, n, tn, twt, kt, ke, lamb):
+    tags = []
+    for i, row in val_csv.iterrows():
+        sentence = row['sentence'].split(" ")
+        tags += tag_example(sentence, n, tn, twt, kt, ke, lamb)
+    print(len(tags))
+    print(tags[:32])
+    df = pd.DataFrame(tags, index = [i for i in range(len(tags))])  
+    df.to_csv('val_results.csv')
+
+tag_csv(val_csv, 2, train_ngrams, train_word_tag, 1, 1, 1)

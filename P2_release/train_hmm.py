@@ -251,7 +251,7 @@ def feature_vectorizer(train_csv):
 
 def train_classifier(train_data, labels):
     data = []
-    for i in range(train_data.shape[0]):
+    for i in range(len(train_data)):
         data.append((train_data[i], labels[i]))
     print('starting')
     classifier = MaxentClassifier.train(data, algorithm = 'GIS', trace = 0, max_iter = 1000)

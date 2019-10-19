@@ -121,8 +121,8 @@ def tag_example(example, n, tn, twt, kt, ke, lamb):
         if i < n:
             emission_0  = word_tag_prob(twt, t, '0', k=ke)
             emission_1 = word_tag_prob(twt, t, '1', k=ke)
-            trans_0 = ngram_prob(tn, ['<s>'] * i + tags + ['0'], lamb=lamb, k=kt)
-            trans_1 = ngram_prob(tn, ['<s>'] * i + tags + ['1'], lamb=lamb, k=kt)
+            trans_0 = ngram_prob(tn, ['<s>'] * (n-1-i) + tags + ['0'], lamb=lamb, k=kt)
+            trans_1 = ngram_prob(tn, ['<s>'] * (n-1-i) + tags + ['1'], lamb=lamb, k=kt)
             p_0 = emission_0 * trans_0
             p_1 = emission_1 * trans_1
             if p_0 > p_1:
@@ -146,10 +146,55 @@ def tag_csv(val_csv, n, tn, twt, kt, ke, lamb):
     tags = []
     for i, row in val_csv.iterrows():
         sentence = row['sentence'].split(" ")
-        tags += tag_example(sentence, n, tn, twt, kt, ke, lamb)
+        tags += viterbi(sentence, n, tn, twt, kt, ke, lamb)
     print(len(tags))
     print(tags[:32])
     df = pd.DataFrame(tags, index = [i for i in range(len(tags))])  
-    df.to_csv('val_results.csv')
+    df.to_csv('val_results_vit.csv')
 
-tag_csv(val_csv, 2, train_ngrams, train_word_tag, 1, 1, 1)
+def viterbi(example, n, tn, twt, kt, ke, lamb):
+    score = np.zeros((len(example), 2))
+    backptr = np.zeros((len(example), 2))
+    for i, t in enumerate(example):
+        if i < n-1:
+            score[i,0] = word_tag_prob(twt, t, '0', k=ke) + ngram_prob(tn, ['<s>', '0'], lamb=lamb, k=kt)
+            score[i,1] = word_tag_prob(twt, t, '1', k=ke) + ngram_prob(tn, ['<s>', '1'], lamb=lamb, k=kt)
+        else:
+            score_00 = score[i-1,0] + ngram_prob(tn, ['0', '0'], lamb=lamb, k=kt)
+            score_10 = score[i-1,1] + ngram_prob(tn, ['1', '0'], lamb=lamb, k=kt)
+            if score_00 > score_10:
+                score[i,0] = score_00 + word_tag_prob(twt, t, '0', k=ke)
+                backptr[i,0] = 0
+            else:
+                score[i,0] = score_10 + word_tag_prob(twt, t, '0', k=ke)
+                backptr[i,0] = 1
+            
+            score_01 = score[i-1,0] + ngram_prob(tn, ['0', '1'], lamb=lamb, k=kt)
+            score_11 = score[i-1,1] + ngram_prob(tn, ['1', '1'], lamb=lamb, k=kt)
+            if score_01 > score_11:
+                score[i,1] = score_01 + word_tag_prob(twt, t, '1', k=ke)
+                backptr[i,1] = 0
+            else:
+                score[i,1] = score_11 + word_tag_prob(twt, t, '1', k=ke)
+                backptr[i,1] = 1
+    print(score, backptr)
+    tags = [0 for i in example]
+    if score[-1,0] > score[-1,1]:
+        tags[-1] = 0
+    else:
+        tags[-1] = 1
+    for i in range(len(example)-2, -1, -1):
+        tags[i] = int(backptr[i+1,tags[i+1]])
+    return tags
+
+
+tag_csv(val_csv, 2, train_ngrams, train_word_tag, 1, 0.1, 0.1)
+#print(viterbi("Ca n't fail to be entertaining .".split(' '), 2, train_ngrams, train_word_tag, 1, 1, 1))
+# for i, row in train_csv.iterrows():
+#     l = viterbi(row['sentence'].split(' '), 2, train_ngrams, train_word_tag, 1, 1, 1)
+#     labels = string_list_to_list(row['label_seq'])
+#     print(l, row['label_seq'])
+#     print(sum([str(l[i]) == label for i, label in enumerate(labels)]), len(l))
+#     print('\n')
+#     if i > 50:
+#         break

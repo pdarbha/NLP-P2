@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import csv
 import ast
+import random
 
 train_csv = pd.read_csv('data_release/train.csv', encoding = 'ISO-8859-1')
 val_csv = pd.read_csv('data_release/val.csv', encoding = 'ISO-8859-1')
@@ -55,7 +56,7 @@ ngram is the ngram that the probability of will be returned using ngram estimati
 lamb is the weight
 k is the smoothing parameter
 """
-def bigram_prob(train_bigrams, train_unigrams, ng, l1=0, k=0):
+def bigram_prob(train_bigrams, train_unigrams, ng, l1=0, k=0, l=1):
     bigram = str(ng)
     unigram = str(ng[0])
     denom_bi = sum(train_bigrams.values()) + k*len(train_bigrams)
@@ -65,11 +66,11 @@ def bigram_prob(train_bigrams, train_unigrams, ng, l1=0, k=0):
     else:
         p_bi = (train_bigrams[bigram] + k) / denom_bi
     if unigram not in train_unigrams:
-        p = k / denom_uni
+        p_uni = k / denom_uni
     else: 
         p_uni = (train_unigrams[unigram] + k) / denom_uni
     p = (1-l1) * p_bi + l1 * p_uni
-    return np.log(p)
+    return l * np.log(p)
 
 """
 returns the log probability of [word] given [tag] using the training set [train_word_tags]
@@ -79,12 +80,9 @@ k is the smoothing parameter
 def word_tag_prob(train_word_tags, word, tag, k=0):
     denom = sum(train_word_tags[tag].values()) + k*len(train_word_tags[tag])
     if word in train_word_tags[tag]:
-        return train_word_tags[tag][word] * np.log((train_word_tags[tag][word] + k) / denom)
+        return np.log((train_word_tags[tag][word] + k) / denom)
     else:
         return np.log(k / denom)
-
-
-
 
 # l = string_list_to_list(train_csv['label_seq'][9])
 # print(gen_ngram_from_list(l, 2))
@@ -125,43 +123,16 @@ def gen_training_data(train_csv, n):
 train_bigrams, train_word_tag = gen_training_data(train_csv, 2)
 train_unigrams, _ = gen_training_data(train_csv, 1)
 
-def tag_example(example, tb, tu, twt, kt, ke, l1):
-    tags = []
-    for i, t in enumerate(example):
-        if i < 2:
-            emission_0  = word_tag_prob(twt, t, '0', k=ke)
-            emission_1 = word_tag_prob(twt, t, '1', k=ke)
-            trans_0 = ngram_prob(tn, ['<s>'] * (2-1-i) + tags + ['0'], lamb=lamb, k=kt)
-            trans_1 = ngram_prob(tn, ['<s>'] * (2-1-i) + tags + ['1'], lamb=lamb, k=kt)
-            p_0 = emission_0 * trans_0
-            p_1 = emission_1 * trans_1
-            if p_0 > p_1:
-                tags.append(0)
-            else:
-                tags.append(1)
-        else:
-            emission_0  = word_tag_prob(twt, t, '0', k=ke)
-            emission_1 = word_tag_prob(twt, t, '1', k=ke)
-            trans_0 = bigram_prob(tb, tu, tags[:i-2+1] + ['0'], l1=l1, k=kt)
-            trans_1 = bigram_prob(tb, tu, tags[:i-2+1] + ['1'], l1=l1, k=kt)
-            p_0 = emission_0 * trans_0
-            p_1 = emission_1 * trans_1
-            if p_0 > p_1:
-                tags.append(0)
-            else:
-                tags.append(1)
-    return tags
-
-def viterbi(example, tb, tu, twt, kt, ke, l1):
+def viterbi(example, tb, tu, twt, kt, ke, l1, l):
     score = np.zeros((len(example), 2))
     backptr = np.zeros((len(example), 2))
     for i, t in enumerate(example):
         if i < 2-1:
-            score[i,0] = word_tag_prob(twt, t, '0', k=ke) + ngram_prob(tb, tu, ['<s>', '0'], l1=l1, k=kt)
-            score[i,1] = word_tag_prob(twt, t, '1', k=ke) + ngram_prob(tb, tu, ['<s>', '1'], l1=l1, k=kt)
+            score[i,0] = word_tag_prob(twt, t, '0', k=ke) + bigram_prob(tb, tu, ['<s>', '0'], l1=l1, k=kt, l=l)
+            score[i,1] = word_tag_prob(twt, t, '1', k=ke) + bigram_prob(tb, tu, ['<s>', '1'], l1=l1, k=kt, l=l)
         else:
-            score_00 = score[i-1,0] + ngram_prob(tb, tu, ['0', '0'], l1=l1, k=kt)
-            score_10 = score[i-1,1] + ngram_prob(tb, tu, ['1', '0'], l1=l1, k=kt)
+            score_00 = score[i-1,0] + bigram_prob(tb, tu, ['0', '0'], l1=l1, k=kt, l=l)
+            score_10 = score[i-1,1] + bigram_prob(tb, tu, ['1', '0'], l1=l1, k=kt, l=l)
             if score_00 > score_10:
                 score[i,0] = score_00 + word_tag_prob(twt, t, '0', k=ke)
                 backptr[i,0] = 0
@@ -169,15 +140,14 @@ def viterbi(example, tb, tu, twt, kt, ke, l1):
                 score[i,0] = score_10 + word_tag_prob(twt, t, '0', k=ke)
                 backptr[i,0] = 1
             
-            score_01 = score[i-1,0] + ngram_prob(tb, tu, ['0', '1'], l1=l1, k=kt)
-            score_11 = score[i-1,1] + ngram_prob(tb, tu, ['1', '1'], l1=l1, k=kt)
+            score_01 = score[i-1,0] + bigram_prob(tb, tu, ['0', '1'], l1=l1, k=kt, l=l)
+            score_11 = score[i-1,1] + bigram_prob(tb, tu, ['1', '1'], l1=l1, k=kt, l=l)
             if score_01 > score_11:
                 score[i,1] = score_01 + word_tag_prob(twt, t, '1', k=ke)
                 backptr[i,1] = 0
             else:
                 score[i,1] = score_11 + word_tag_prob(twt, t, '1', k=ke)
                 backptr[i,1] = 1
-    print(score, backptr)
     tags = [0 for i in example]
     if score[-1,0] > score[-1,1]:
         tags[-1] = 0
@@ -187,21 +157,20 @@ def viterbi(example, tb, tu, twt, kt, ke, l1):
         tags[i] = int(backptr[i+1,tags[i+1]])
     return tags
 
-def tag_csv(val_csv, tb, tu, twt, kt, ke, l1):
+def tag_csv(val_csv, tb, tu, twt, kt, ke, l1, l):
     tags = []
     for i, row in val_csv.iterrows():
         sentence = row['sentence'].split(" ")
-        tags += viterbi(sentence, tb, tu, twt, kt, ke, l1)
-    print(len(tags))
-    print(tags[:32])
-    df = pd.DataFrame(tags, index = [i for i in range(len(tags))])  
+        tags += viterbi(sentence, tb, tu, twt, kt, ke, l1, l)
+    dic = {'idx': [i+1 for i in range(len(tags))], 'label': tags}
+    df = pd.DataFrame.from_dict(dic)  
     df.to_csv('test_results.csv')
 
-def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1):
-    preds = []
+def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1, l):
+    predictions = []
     for i, row in val_csv.iterrows():
         sentence = row['sentence'].split(" ")
-        preds += viterbi(sentence, tb, tu, twt, kt, ke, l1)
+        predictions += viterbi(sentence, tb, tu, twt, kt, ke, l1, l)
     
     gold_labels = []
     with open('./data_release/val.csv', encoding='latin-1') as f:
@@ -234,26 +203,26 @@ def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1):
     return met_f1
 
 def tune(val_csv, tb, tu, twt):
-    t, e, l, f = 0, 0, 0, 0
-    for ke in range(0.1, 5.1, 0.1):
-        for kt in range(0.1, 5.1, 0.1):
-            for l1 in range(0.05, 0.96, 0.01):
-                f1 = tag_csv(val_csv, tb, tu, twt, kt, ke, l1)
-                if f1 > f:
-                    f = f1
-                    t = kt
-                    e = ke
-                    l = l1
-    return t, e, l
+    t, e, x, y, f = 0, 0, 0, 0, 0
+    it = 100
+    while it > 0:
+        ke = random.randint(1, 11)/10
+        kt = random.randint(1, 11)/10
+        l1 = random.randint(0, 96)/100
+        lamb = random.randint(0, 11)/10
+        f1 = preds_goldlabels(val_csv, tb, tu, twt, kt, ke, l1, lamb)
+        if f1 > f:
+            f = f1
+            t = kt
+            e = ke
+            x = l1
+            y = lamb
+            print(f't: {t}, e: {e}, x: {x}, y: {y}')
+        it -= 1
+    print(f'Max t: {t}, Max e: {e}, Max x: {x}, Max y: {y}')
 
-tag_csv(test_csv, train_bigrams, train_word_tag, 1, 1, 1)
+#Max t: 0.8, Max e: 0.2, Max x: 0.12, Max y: 0.3
+#tune(val_csv, train_bigrams, train_unigrams, train_word_tag)
 
-#print(viterbi("Ca n't fail to be entertaining .".split(' '), 2, train_ngrams, train_word_tag, 1, 1, 1))
-# for i, row in train_csv.iterrows():
-#     l = viterbi(row['sentence'].split(' '), 2, train_ngrams, train_word_tag, 1, 1, 1)
-#     labels = string_list_to_list(row['label_seq'])
-#     print(l, row['label_seq'])
-#     print(sum([str(l[i]) == label for i, label in enumerate(labels)]), len(l))
-#     print('\n')
-#     if i > 50:
-#         break
+tag_csv(test_csv, train_bigrams, train_unigrams, train_word_tag, 0.8, 0.2, 0.12, 0.3)
+

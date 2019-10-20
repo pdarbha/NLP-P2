@@ -17,8 +17,6 @@ n - specifies size of ngrams
 def gen_ngram_from_list(l, n):
     ngrams = {}
     for i in range(len(l)):
-        if i == 0 and n == 1:
-            ngrams[str(["<s>"])] = 1
         if i < n-1:
             ng = str(["<s>"]*(n-1-i) + l[:i+1])
             if ng in ngrams:
@@ -63,7 +61,14 @@ k is the smoothing parameter
 def bigram_prob(train_bigrams, train_unigrams, ng, l1=0, k=0, l=1):
     bigram = str(ng)
     unigram = str(ng[0:1])
-    denom_bi = train_unigrams[unigram] + k*len(train_bigrams)
+    if unigram == "['<s>']":
+        ct = 0
+        for bigram, value in train_bigrams.items():
+            if '<s>' in bigram:
+                ct += value
+        denom_bi = ct + k*len(train_bigrams)
+    else:
+        denom_bi = train_unigrams[unigram] + k*len(train_bigrams)
     denom_uni = sum(train_unigrams.values()) + k*len(train_unigrams)
     if bigram not in train_bigrams:
         p_bi = k / denom_bi
@@ -169,7 +174,7 @@ def tag_csv(val_csv, tb, tu, twt, kt, ke, l1, l):
         tags += viterbi(sentence, tb, tu, twt, kt, ke, l1, l)
     dic = {'idx': [i+1 for i in range(len(tags))], 'label': tags}
     df = pd.DataFrame.from_dict(dic)  
-    df.to_csv('test_results_hmm.csv')
+    df.to_csv('val_results_hmm.csv')
 
 def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1, l):
     predictions = []
@@ -229,7 +234,7 @@ def tune(val_csv, tb, tu, twt):
 #Max t: 0.8, Max e: 0.2, Max x: 0.12, Max y: 0.3
 #tune(val_csv, train_bigrams, train_unigrams, train_word_tag)
 
-tag_csv(test_csv, train_bigrams, train_unigrams, train_word_tag, 0.8, 0.2, 0.12, 0.3)
+tag_csv(val_csv, train_bigrams, train_unigrams, train_word_tag, 0.8, 0.2, 0.12, 0.3)
 
 def feature_vectorizer(train_csv):
     dics = []

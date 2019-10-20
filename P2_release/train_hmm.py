@@ -17,6 +17,8 @@ n - specifies size of ngrams
 def gen_ngram_from_list(l, n):
     ngrams = {}
     for i in range(len(l)):
+        if i == 0 and n == 1:
+            ngrams[str(["<s>"])] = 1
         if i < n-1:
             ng = str(["<s>"]*(n-1-i) + l[:i+1])
             if ng in ngrams:
@@ -60,8 +62,8 @@ k is the smoothing parameter
 """
 def bigram_prob(train_bigrams, train_unigrams, ng, l1=0, k=0, l=1):
     bigram = str(ng)
-    unigram = str(ng[0])
-    denom_bi = sum(train_bigrams.values()) + k*len(train_bigrams)
+    unigram = str(ng[0:1])
+    denom_bi = train_unigrams[unigram] + k*len(train_bigrams)
     denom_uni = sum(train_unigrams.values()) + k*len(train_unigrams)
     if bigram not in train_bigrams:
         p_bi = k / denom_bi
@@ -80,7 +82,7 @@ train_word_tags is the dictionary mapping tags to a dictionary mapping words to 
 k is the smoothing parameter
 """
 def word_tag_prob(train_word_tags, word, tag, k=0):
-    vocab = sum(list(map(lambda x: len(x), train_word_tag.values())))
+    vocab = len(set(list(train_word_tags['0'].keys()) + list(train_word_tags['1'].keys())))
     denom = sum(train_word_tags[tag].values()) + k*vocab
     if word in train_word_tags[tag]:
         return np.log((train_word_tags[tag][word] + k) / denom)
@@ -167,7 +169,7 @@ def tag_csv(val_csv, tb, tu, twt, kt, ke, l1, l):
         tags += viterbi(sentence, tb, tu, twt, kt, ke, l1, l)
     dic = {'idx': [i+1 for i in range(len(tags))], 'label': tags}
     df = pd.DataFrame.from_dict(dic)  
-    df.to_csv('test_results.csv')
+    df.to_csv('test_results_hmm.csv')
 
 def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1, l):
     predictions = []
@@ -227,7 +229,7 @@ def tune(val_csv, tb, tu, twt):
 #Max t: 0.8, Max e: 0.2, Max x: 0.12, Max y: 0.3
 #tune(val_csv, train_bigrams, train_unigrams, train_word_tag)
 
-# tag_csv(test_csv, train_bigrams, train_unigrams, train_word_tag, 0.8, 0.2, 0.12, 0.3)
+tag_csv(test_csv, train_bigrams, train_unigrams, train_word_tag, 0.8, 0.2, 0.12, 0.3)
 
 def feature_vectorizer(train_csv):
     dics = []
@@ -238,10 +240,11 @@ def feature_vectorizer(train_csv):
         for i, pos in enumerate(pos_tags):
             dic = {}
             dic['pos'] = pos
-            if i == 0:
-                dic['prev'] = "<s>"
-            else:
-                dic['prev'] = label[i-1]
+            #dic['position'] = i/len(pos_tags)
+            # if i == 0:
+            #     dic['prev'] = "<s>"
+            # else:
+            #     dic['prev'] = label[i-1]
             dics.append(dic)
             labels.append(label[i])
     vec = DictVectorizer(sparse=False) 
@@ -263,12 +266,12 @@ def viterbi_feat(text, pos, twt, ke, vec, classifier):
     backptr = np.zeros((len(text), 2))
     for i, t in enumerate(text):
         if i == 0:
-            feat = {'pos':pos[i], 'prev':"<s>"}
+            feat = {'pos':pos[i]}#, 'prev':"<s>"}#, 'position': i/len(text)}
             feat_vec = vec.transform(feat)
             score[i,0] = word_tag_prob(twt, t, '0', k=ke) + np.log(classifier.prob_classify(vec.inverse_transform(feat_vec)[0]).prob('0'))
             score[i,1] = word_tag_prob(twt, t, '1', k=ke) + np.log(classifier.prob_classify(vec.inverse_transform(feat_vec)[0]).prob('1'))
         else:
-            feat = {'pos':pos[i], 'prev':"0"}
+            feat = {'pos':pos[i]}#, 'prev':"0"}#, 'position': i/len(text)}
             feat_vec = vec.transform(feat)
             score_00 = score[i-1,0] + np.log(classifier.prob_classify(vec.inverse_transform(feat_vec)[0]).prob('0'))
             score_10 = score[i-1,1] + np.log(classifier.prob_classify(vec.inverse_transform(feat_vec)[0]).prob('1'))
@@ -279,7 +282,7 @@ def viterbi_feat(text, pos, twt, ke, vec, classifier):
                 score[i,0] = score_10 + word_tag_prob(twt, t, '0', k=ke)
                 backptr[i,0] = 1
             
-            feat = {'pos':pos[i], 'prev':"1"}
+            feat = {'pos':pos[i]}#, 'prev':"1"}#, 'position': i/len(text)}
             feat_vec = vec.transform(feat)
             score_01 = score[i-1,0] + np.log(classifier.prob_classify(vec.inverse_transform(feat_vec)[0]).prob('0'))
             score_11 = score[i-1,1] + np.log(classifier.prob_classify(vec.inverse_transform(feat_vec)[0]).prob('1'))
@@ -306,9 +309,9 @@ def tag_csv2(val_csv, twt, ke, vec, classifier):
         tags += viterbi_feat(sentence, pos, twt, ke, vec, classifier)
     dic = {'idx': [i+1 for i in range(len(tags))], 'label': tags}
     df = pd.DataFrame.from_dict(dic)  
-    df.to_csv('test_results.csv')
+    df.to_csv('val_results_3.csv')
 
-vec, X, labels = feature_vectorizer(train_csv)
-print(X.shape, len(labels))
-classifier = train_classifier(vec.inverse_transform(X), labels)
-tag_csv2(test_csv, train_word_tag, 0.2, vec, classifier)
+#vec, X, labels = feature_vectorizer(train_csv)
+#print(X.shape, len(labels))
+#classifier = train_classifier(vec.inverse_transform(X), labels)
+#tag_csv2(val_csv, train_word_tag, 0.2, vec, classifier)

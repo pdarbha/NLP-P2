@@ -133,6 +133,9 @@ def gen_training_data(train_csv, n):
 train_bigrams, train_word_tag = gen_training_data(train_csv, 2)
 train_unigrams, _ = gen_training_data(train_csv, 1)
 
+'''
+Viterbi algorithm for part 1, implemented as described in lecture. 
+'''
 def viterbi(example, tb, tu, twt, kt, ke, l1, l):
     score = np.zeros((len(example), 2))
     backptr = np.zeros((len(example), 2))
@@ -167,6 +170,9 @@ def viterbi(example, tb, tu, twt, kt, ke, l1, l):
         tags[i] = int(backptr[i+1,tags[i+1]])
     return tags
 
+'''
+Create csv from predictions.
+'''
 def tag_csv(val_csv, tb, tu, twt, kt, ke, l1, l):
     tags = []
     for i, row in val_csv.iterrows():
@@ -176,6 +182,9 @@ def tag_csv(val_csv, tb, tu, twt, kt, ke, l1, l):
     df = pd.DataFrame.from_dict(dic)  
     df.to_csv('val_results_hmm.csv')
 
+'''
+Helper method to get all the evalutation metrics for tuning.
+'''
 def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1, l):
     predictions = []
     for i, row in val_csv.iterrows():
@@ -212,6 +221,9 @@ def preds_goldlabels(truth_val_csv, tb, tu, twt, kt, ke, l1, l):
     print(precision, recall, met_f1, accuracy)
     return met_f1
 
+'''
+Hyperparameter tuning: 2 smoothing, 1 linear interpolation, 1 to weight transition vs emission
+'''
 def tune(val_csv, tb, tu, twt):
     t, e, x, y, f = 0, 0, 0, 0, 0
     it = 100
@@ -236,6 +248,9 @@ def tune(val_csv, tb, tu, twt):
 
 tag_csv(val_csv, train_bigrams, train_unigrams, train_word_tag, 0.8, 0.2, 0.12, 0.3)
 
+'''
+Processes the features to feed into our MaxEnt classifier.
+'''
 def feature_vectorizer(train_csv):
     dics = []
     labels = []
@@ -257,6 +272,9 @@ def feature_vectorizer(train_csv):
     X = vec.transform(dics)
     return vec, X, labels
 
+'''
+Train the MaxEnt classifier.
+'''
 def train_classifier(train_data, labels):
     data = []
     for i in range(len(train_data)):
@@ -266,6 +284,9 @@ def train_classifier(train_data, labels):
     print('done')
     return classifier
 
+'''
+Viterbi algorithm implemented for part 2, using lecture notes.
+'''
 def viterbi_feat(text, pos, twt, ke, vec, classifier):
     score = np.zeros((len(text), 2))
     backptr = np.zeros((len(text), 2))
@@ -306,6 +327,9 @@ def viterbi_feat(text, pos, twt, ke, vec, classifier):
         tags[i] = int(backptr[i+1,tags[i+1]])
     return tags
 
+'''
+Create a csv from predictions for part 2.
+'''
 def tag_csv2(val_csv, twt, ke, vec, classifier):
     tags = []
     for i, row in val_csv.iterrows():
